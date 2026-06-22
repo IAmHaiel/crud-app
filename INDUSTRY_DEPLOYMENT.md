@@ -263,15 +263,15 @@ jobs:
   build-and-deploy-backend:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Log in to Azure Container Registry
-        uses: azure/docker-login@v1
-        with:
-          login-server: ${{ env.AZURE_CONTAINER_REGISTRY }}
-          username: ${{ secrets.AZURE_REGISTRY_USERNAME }}
-          password: ${{ secrets.AZURE_REGISTRY_PASSWORD }}
+        run: az acr login --name crudregistry2026
 
       - name: Build and push backend Docker image
         run: |
@@ -279,10 +279,9 @@ jobs:
           docker tag ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }} ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest
           docker push --all-tags ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}
 
-      - name: Log in to Azure
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Configure ACR credentials on Container App
+        run: |
+          az containerapp registry set --name crud-backend --resource-group crud-app --server ${{ env.AZURE_CONTAINER_REGISTRY }} --username ${{ secrets.AZURE_REGISTRY_USERNAME }} --password ${{ secrets.AZURE_REGISTRY_PASSWORD }}
 
       - name: Deploy to Azure Container Apps
         run: |
@@ -292,8 +291,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-deploy-backend
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Deploy to Vercel
         uses: amondnet/vercel-action@v25
@@ -328,7 +326,7 @@ Vercel is a hosting platform for frontend apps. It gives you a global CDN, autom
 7. On the configure screen:
    - **Root Directory**: Click **Edit** → select `Frontend`
    - **Environment Variables**: Add one:
-     - Name: `API_URL`
+     - Name: `VITE_API_URL`
      - Value: `https://crud-backend.cleverhill-abc123.eastus.azurecontainerapps.io/api` (replace with YOUR backend URL from step 2.9)
 8. Click **Deploy**
 
