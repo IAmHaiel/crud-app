@@ -294,8 +294,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Deploy to Vercel
-        run: npx vercel@latest --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
-        working-directory: ./Frontend
+        run: cd Frontend && npx vercel@latest --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
