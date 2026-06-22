@@ -1,116 +1,111 @@
-# Deployment Guide (No Google Cloud)
+# Deployment Guide — Railway
 
-## Overview
-
-The project now supports **Docker**, making it portable across any cloud provider that supports containers. Two deployment paths are available:
-
-| Path | When to Use |
-|------|-------------|
-| **Docker** (recommended) | Deploy the whole stack (frontend + backend + DB) as containers |
-| **Separate services** | Deploy frontend (Vercel) + backend (Railway) independently |
-
----
-
-## Deployment via Docker
-
-### Option A: Railway (easiest — one project, all containers)
-
-1. Push to GitHub
-2. Go to https://railway.app → **New Project** → **Deploy from GitHub repo**
-3. Select your repo
-4. Railway detects the `docker-compose.yml` and creates three services automatically:
-   - **db** — PostgreSQL 18
-   - **backend** — ASP.NET Core API on port 8080
-   - **frontend** — Nginx serving SPA on port 80
-5. No extra config needed — everything is in `docker-compose.yml`
-
-### Option B: Fly.io (per-container control)
-
-```bash
-# Install flyctl, then launch each service
-cd Backend && fly launch --image backend
-cd Frontend && fly launch --image frontend
-fly postgres create
-```
-
-### Option C: Any Docker host (VPS, AWS EC2, Azure VM)
-
-```bash
-docker compose up -d
-```
-
-The app is served at `http://host:5173`. Nginx automatically proxies `/api/*` requests to the backend container.
-
----
-
-## Deployment without Docker (Separate Services)
-
-### Frontend → Vercel
-
-1. Go to https://vercel.com → **Add New** → **Project** → Import your GitHub repo
-2. Set **Root Directory** to `Frontend`
-3. Set environment variable:
-   ```
-   VITE_API_URL=https://your-backend-url.up.railway.app/api
-   ```
-4. Deploy
-
-### Backend → Railway
-
-1. Go to https://railway.app → **New Project** → **Deploy from GitHub repo**
-2. Select your repo
-3. Set **Root Directory** to `Backend`
-4. Add a **PostgreSQL** plugin
-5. Set environment variables:
-   ```
-   ASPNETCORE_ENVIRONMENT=Production
-   ConnectionStrings__DefaultConnection= (auto-filled by Postgres plugin)
-   Jwt__Key= (your secure key, 32+ chars)
-   Jwt__Issuer=Backend
-   Jwt__Audience=Frontend
-   ```
-6. Railway builds and runs the .NET app
-
-### Database
-
-Railway and Render both offer managed PostgreSQL:
-- **Railway**: Free dev database (resets after 24h idle) or $5/mo persistent
-- **Render**: Free 1GB PostgreSQL (sleeps after 15min idle)
-
----
+This guide covers the Railway deployment path used in this project.
 
 ## Architecture
 
-### Docker Path
 ```
-User → http://host:5173
-         │
-      Nginx (frontend container)
-         ├── /api/* → backend:8080 (ASP.NET Core)
-         └── /*     → static SPA files
-                         │
-                     backend ─→ db:5432 (PostgreSQL)
-```
-
-### Separate Services Path
-```
-User → Vercel CDN (React SPA)
-         ↓ API calls
-      Railway (ASP.NET Core API)
+User → Railway Frontend (Nginx → SPA)
+         ↓ API calls (via window.__API_URL__)
+       Railway Backend (ASP.NET Core)
          ↓
-      Railway PostgreSQL
+       Railway PostgreSQL
 ```
 
----
+## Prerequisites
 
-## Local Docker Dev
+- GitHub repo with the project pushed
+- Railway account (https://railway.app)
+
+## Step 1: Push to GitHub
+
+```bash
+git add -A
+git commit -m "Initial commit"
+git branch -m master main
+git remote add origin https://github.com/yourusername/crud-app.git
+git push -u origin main
+```
+
+## Step 2: Create Railway Project
+
+1. Go to https://railway.app → **New Project**
+2. Select **Deploy from GitHub repo**
+3. Install the Railway GitHub app and select your repo
+
+## Step 3: Add PostgreSQL
+
+1. In your Railway project, click **+ New** → **Database** → **Add PostgreSQL**
+2. Click the PostgreSQL service
+3. Go to **Variables** tab → copy the `DATABASE_URL` value
+
+## Step 4: Deploy Backend Service
+
+1. Click **+ New** → **GitHub Repo** → select your repo
+2. Set **Root Directory** to `Backend`
+3. Go to the service **Variables** tab and add:
+
+   | Variable Name | Value |
+   |---|---|
+   | `ASPNETCORE_ENVIRONMENT` | `Production` |
+   | `ASPNETCORE_URLS` | `http://0.0.0.0:8080` |
+   | `ConnectionStrings__DefaultConnection` | Convert `DATABASE_URL` from PostgreSQL: `Host=host;Port=5432;Database=dbname;Username=user;Password=pass;SSL Mode=Require;Trust Server Certificate=true` |
+   | `Jwt__Key` | `YourSuperSecretKey32CharsLong!` |
+   | `Jwt__Issuer` | `Backend` |
+   | `Jwt__Audience` | `Frontend` |
+
+4. Generate a public URL: **Settings** → **Generate Domain** → port **8080**
+5. Note the generated URL (e.g. `https://backend-production-xxxx.up.railway.app`)
+
+## Step 5: Deploy Frontend Service
+
+1. Click **+ New** → **GitHub Repo** → select your repo
+2. Set **Root Directory** to `Frontend`
+3. Go to **Variables** tab and add:
+
+   | Variable Name | Value |
+   |---|---|
+   | `API_URL` | `https://backend-production-xxxx.up.railway.app/api` |
+
+4. The `entrypoint.sh` script writes this value into `config.js` at container startup
+5. The SPA reads `window.__API_URL__` from `config.js` for all API calls
+6. Generate a public URL: **Settings** → **Generate Domain** → port **80**
+
+## Step 6: Verify
+
+1. Open the frontend URL in your browser
+2. Press **F12** → Console → type `window.__API_URL__` — should show the backend URL with `/api`
+3. Register a user and test CRUD operations
+
+## Environment Variables Summary
+
+### Backend
+| Variable | Purpose |
+|---|---|
+| `ASPNETCORE_URLS` | Binds to port 8080 (must match Generate Domain port) |
+| `ConnectionStrings__DefaultConnection` | Railway PostgreSQL connection string |
+| `Jwt__Key` | Secret key for signing JWT tokens (min 32 chars) |
+
+### Frontend
+| Variable | Purpose |
+|---|---|
+| `API_URL` | Backend URL with `/api` suffix, injected into `config.js` at runtime |
+
+## Local Development
 
 ```bash
 docker compose up -d
-# App: http://localhost:5173
-# Backend: http://localhost:8080
-# DB: localhost:5432
-
-docker compose down     # Stop
-docker compose down -v  # Stop + delete volume
 ```
+
+- Frontend: http://localhost:5173
+- Backend: http://localhost:8080
+- Nginx proxies `/api/*` to backend container via Docker DNS
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Backend can't connect to DB | Verify `ConnectionStrings__DefaultConnection` matches the PostgreSQL `DATABASE_URL` |
+| `window.__API_URL__` is undefined | Add `<script src="/config.js">` before the module script in `index.html` |
+| 405 / 404 on API calls | Verify `API_URL` includes `/api` at the end and is set correctly |
+| Nginx "host not found in upstream" | Frontend Nginx should only serve static files — no proxy_pass to "backend" hostname on Railway |
