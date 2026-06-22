@@ -294,13 +294,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: "--prod"
-          working-directory: ./Frontend
+        run: npx vercel@latest --prod --token ${{ secrets.VERCEL_TOKEN }} --yes
+        working-directory: ./Frontend
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 ```
 
 **Replace** `crudregistry2026` in line 5 with your actual ACR name from step 2.6.
