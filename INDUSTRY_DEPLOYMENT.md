@@ -109,16 +109,7 @@ az group create --name crud-app --location eastus
 ### 2.4 Create the PostgreSQL Database
 
 ```bash
-az postgres flexible-server create \
-  --name crud-db \
-  --resource-group crud-app \
-  --location eastus \
-  --admin-user postgres \
-  --admin-password MyStr0ngP@ss! \
-  --sku-name Standard_B1ms \
-  --tier Burstable \
-  --storage-size 32 \
-  --public-access 0.0.0.0
+az postgres flexible-server create --name crud-db --resource-group crud-app --location eastus --admin-user postgres --admin-password MyStr0ngP@ss! --sku-name Standard_B1ms --tier Burstable --storage-size 32 --public-access 0.0.0.0
 ```
 
 **What each flag does:**
@@ -134,11 +125,7 @@ az postgres flexible-server create \
 ### 2.5 Get the Database Connection String
 
 ```bash
-az postgres flexible-server show-connection-string \
-  --server crud-db \
-  --database postgres \
-  --resource-group crud-app \
-  --query "connectionStrings.ado.net"
+az postgres flexible-server show-connection-string --server crud-db --database postgres --resource-group crud-app --query "connectionStrings.ado.net"
 ```
 
 This outputs something like:
@@ -161,12 +148,7 @@ Server=crud-db.postgres.database.azure.com;Database=postgres;Port=5432;User Id=p
 Azure Container Registry (ACR) is a place to store Docker images (like a private Docker Hub).
 
 ```bash
-az acr create \
-  --name crudregistry2026 \
-  --resource-group crud-app \
-  --location eastus \
-  --sku Basic \
-  --admin-enabled true
+az acr create --name crudregistry2026 --resource-group crud-app --location eastus --sku Basic --admin-enabled true
 ```
 
 > **Note**: `crudregistry2026` must be globally unique. If it's taken, try `crudappregistry123`, `mycrudregistry`, etc. The name can contain letters and numbers only.
@@ -184,32 +166,13 @@ Save the **username** and one of the **passwords** shown.
 Azure Container Apps runs your Docker containers without managing servers (serverless).
 
 ```bash
-az containerapp env create \
-  --name crud-env \
-  --resource-group crud-app \
-  --location eastus
+az containerapp env create --name crud-env --resource-group crud-app --location eastus
 ```
 
 ### 2.8 Deploy the Backend to Azure Container Apps
 
 ```bash
-az containerapp create \
-  --name crud-backend \
-  --resource-group crud-app \
-  --environment crud-env \
-  --image mcr.microsoft.com/dotnet/samples:aspnetapp \
-  --target-port 8080 \
-  --ingress external \
-  --min-replicas 1 \
-  --max-replicas 10 \
-  --secrets dbconn="Server=crud-db.postgres.database.azure.com;Database=postgres;Port=5432;User Id=postgres;Password=MyStr0ngP@ss!;Ssl Mode=Require;Trust Server Certificate=true" \
-  --env-vars \
-    ASPNETCORE_ENVIRONMENT=Production \
-    ASPNETCORE_URLS=http://0.0.0.0:8080 \
-    ConnectionStrings__DefaultConnection=secretref:dbconn \
-    Jwt__Key=YourSuperSecretKeyThatIsAtLeast32CharactersLong! \
-    Jwt__Issuer=Backend \
-    Jwt__Audience=Frontend
+az containerapp create --name crud-backend --resource-group crud-app --environment crud-env --image mcr.microsoft.com/dotnet/samples:aspnetapp --target-port 8080 --ingress external --min-replicas 1 --max-replicas 10 --secrets dbconn="Server=crud-db.postgres.database.azure.com;Database=postgres;Port=5432;User Id=postgres;Password=MyStr0ngP@ss!;Ssl Mode=Require;Trust Server Certificate=true" --env-vars ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://0.0.0.0:8080 ConnectionStrings__DefaultConnection=secretref:dbconn Jwt__Key=YourSuperSecretKeyThatIsAtLeast32CharactersLong! Jwt__Issuer=Backend Jwt__Audience=Frontend
 ```
 
 **Important**: Replace `server=...`, `password=...` with YOUR actual database values from step 2.5.
@@ -227,11 +190,7 @@ az containerapp create \
 ### 2.9 Get the Backend URL
 
 ```bash
-az containerapp show \
-  --name crud-backend \
-  --resource-group crud-app \
-  --query "properties.configuration.ingress.fqdn" \
-  --output tsv
+az containerapp show --name crud-backend --resource-group crud-app --query "properties.configuration.ingress.fqdn" --output tsv
 ```
 
 This outputs something like: `crud-backend.cleverhill-abc123.eastus.azurecontainerapps.io`
@@ -269,11 +228,7 @@ Add these secrets one at a time:
 Run this command in PowerShell to let GitHub log into Azure:
 
 ```bash
-az ad sp create-for-rbac \
-  --name "crud-app-github" \
-  --role contributor \
-  --scopes /subscriptions/$(az account show --query id -o tsv)/resourceGroups/crud-app \
-  --sdk-auth
+az ad sp create-for-rbac --name "crud-app-github" --role contributor --scopes /subscriptions/$(az account show --query id -o tsv)/resourceGroups/crud-app --sdk-auth
 ```
 
 This outputs a big JSON block. Copy the **entire output** (including the `{}` braces) and paste it as the `AZURE_CREDENTIALS` secret in GitHub.
@@ -331,10 +286,7 @@ jobs:
 
       - name: Deploy to Azure Container Apps
         run: |
-          az containerapp update \
-            --name crud-backend \
-            --resource-group crud-app \
-            --image ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
+          az containerapp update --name crud-backend --resource-group crud-app --image ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
 
   deploy-frontend:
     runs-on: ubuntu-latest
@@ -517,29 +469,19 @@ Application Insights gives you dashboards showing:
 ### 7.1 Create the Resource
 
 ```bash
-az monitor app-insights component create \
-  --app crud-insights \
-  --resource-group crud-app \
-  --location eastus \
-  --application-type web
+az monitor app-insights component create --app crud-insights --resource-group crud-app --location eastus --application-type web
 ```
 
 ### 7.2 Get the Connection String
 
 ```bash
-az monitor app-insights component show \
-  --app crud-insights \
-  --resource-group crud-app \
-  --query connectionString
+az monitor app-insights component show --app crud-insights --resource-group crud-app --query connectionString
 ```
 
 ### 7.3 Add to Backend Environment Variables
 
 ```bash
-az containerapp update \
-  --name crud-backend \
-  --resource-group crud-app \
-  --set-env-vars APPLICATIONINSIGHTS_CONNECTION_STRING="InstrumentationKey=your-key-here" \
+az containerapp update --name crud-backend --resource-group crud-app --set-env-vars APPLICATIONINSIGHTS_CONNECTION_STRING="InstrumentationKey=your-key-here"
 ```
 
 Wait a few minutes, then view live data:
